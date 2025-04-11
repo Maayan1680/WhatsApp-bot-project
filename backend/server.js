@@ -18,8 +18,7 @@ const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
   console.log(`Health check available at: http://localhost:${PORT}/health`);
-  console.log(`Webhook URL for testing: http://localhost:${PORT}/webhook/whatsapp`);
-  console.log(`⚠️ Running with MOCK Twilio client - no actual WhatsApp messages will be sent`);
+  console.log(`Webhook URL for Twilio: http://localhost:${PORT}/webhook/whatsapp`);
 });
 
 // Handle unhandled promise rejections
@@ -35,6 +34,12 @@ function checkEnvironment() {
     'MONGO_URI'
   ];
   
+  const twilioVars = [
+    'TWILIO_ACCOUNT_SID',
+    'TWILIO_AUTH_TOKEN',
+    'TWILIO_PHONE_NUMBER'
+  ];
+  
   // Check for essential variables
   const missingVars = requiredVars.filter(varName => !process.env[varName]);
   if (missingVars.length > 0) {
@@ -42,8 +47,14 @@ function checkEnvironment() {
     process.exit(1);
   }
   
-  // Log that we're using mock Twilio setup
-  console.log('✅ Using MOCK Twilio client (no authentication required)');
+  // Check for Twilio variables
+  const missingTwilioVars = twilioVars.filter(varName => !process.env[varName]);
+  if (missingTwilioVars.length > 0) {
+    console.warn('⚠️ Missing Twilio environment variables:', missingTwilioVars.join(', '));
+    console.warn('⚠️ WhatsApp integration may not work properly.');
+  } else {
+    console.log('✅ Twilio environment variables are set.');
+  }
   
   // Log current environment
   console.log(`✅ Environment: ${process.env.NODE_ENV || 'development'}`);

@@ -1,30 +1,11 @@
 /**
  * Webhook Controller - Handles incoming WhatsApp webhook events
- * MOCK VERSION - Works without Twilio authentication
  */
+const { MessagingResponse } = require('twilio').twiml;
 const { parseTaskMessage, parseCommandMessage } = require('../utils/messageParser');
 const responseFormatter = require('../utils/responseFormatter');
 const taskService = require('../services/taskService');
 const twilioClient = require('../utils/twilioClient');
-
-// Mock TwiML response
-class MockMessagingResponse {
-  constructor() {
-    this.messages = [];
-  }
-  
-  message(text) {
-    this.messages.push(text);
-    return this;
-  }
-  
-  toString() {
-    return JSON.stringify({
-      response: 'MockTwiML',
-      messages: this.messages
-    });
-  }
-}
 
 /**
  * Process incoming WhatsApp messages
@@ -33,12 +14,17 @@ class MockMessagingResponse {
  */
 exports.processIncomingMessage = async (req, res) => {
   try {
+    // Debug logging for all request details
+    console.log('Webhook Request Received:');
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+    
     // Log incoming message for debugging
-    console.log('Received message:', {
+    console.log('Received WhatsApp message:', {
       body: req.body.Body,
       from: req.body.From,
       to: req.body.To,
-      messageId: req.body.MessageSid || 'MOCK_MESSAGE_ID'
+      messageId: req.body.MessageSid
     });
 
     // Extract message content and sender information
@@ -53,8 +39,8 @@ exports.processIncomingMessage = async (req, res) => {
       return res.status(400).send('Bad Request: Missing required fields');
     }
     
-    // Create mock response object
-    const twiml = new MockMessagingResponse();
+    // Create Twilio response object
+    const twiml = new MessagingResponse();
     
     // Parse the message to determine the command type
     const { command, params } = parseCommandMessage(incomingMsg);
@@ -87,36 +73,27 @@ exports.processIncomingMessage = async (req, res) => {
         await handleCreateTask(from, incomingMsg, twiml);
     }
     
-    // Send response in JSON format
-    res.status(200).json({
-      success: true,
-      response: twiml.messages,
-      from: 'MOCK_WHATSAPP_BOT'
-    });
+    // Send the response
+    res.writeHead(200, { 'Content-Type': 'text/xml' });
+    res.end(twiml.toString());
     
     // Log the response for debugging
-    console.log('Sent response message:', twiml.messages);
-    
-    // Also mock a WhatsApp message being sent to the user
-    const responseText = twiml.messages.join('\n\n');
-    if (responseText) {
-      await twilioClient.sendWhatsAppMessage(from, responseText);
-    }
+    console.log('Sent WhatsApp response:', twiml.toString());
   } catch (error) {
     console.error('Error processing webhook:', error);
     
-    // Ensure we always send a response
-    res.status(200).json({
-      success: false,
-      error: 'Something went wrong. Please try again later.',
-      from: 'MOCK_WHATSAPP_BOT'
-    });
+    // Ensure we always send a response to Twilio
+    const twiml = new MessagingResponse();
+    twiml.message(responseFormatter.formatErrorMessage('Something went wrong. Please try again later.'));
+    
+    res.writeHead(200, { 'Content-Type': 'text/xml' });
+    res.end(twiml.toString());
   }
 };
 
 /**
  * Handle help command
- * @param {Object} twiml - Mock MessagingResponse object
+ * @param {Object} twiml - Twilio MessagingResponse object
  */
 async function handleHelp(twiml) {
   twiml.message(responseFormatter.formatHelpMessage());
@@ -125,12 +102,25 @@ async function handleHelp(twiml) {
 /**
  * Handle showing all tasks
  * @param {String} from - User's phone number
- * @param {Object} twiml - Mock MessagingResponse object
+ * @param {Object} twiml - Twilio MessagingResponse object
  */
 async function handleShowTasks(from, twiml) {
   try {
     const tasks = await taskService.getTasksForUser(from);
-    twiml.message(responseFormatter.formatTaskList(tasks));
+    
+    // Get today's date in YYYY-MM-DD format for the link
+    const today = new Date();
+    const dateString = today.toISOString().split('T')[0];
+    
+    // Get the base URL from environment or use a default
+    const frontendBaseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const taskPageUrl = `${frontendBaseUrl}/tasks/${dateString}`;
+    
+    // Add the link to the task list message
+    let message = responseFormatter.formatTaskList(tasks);
+    message += `\n\n📱 *View and manage your tasks on our web app:*\n${taskPageUrl}`;
+    
+    twiml.message(message);
   } catch (error) {
     console.error('Error in handleShowTasks:', error);
     twiml.message(responseFormatter.formatErrorMessage('Could not retrieve your tasks. Please try again later.'));
@@ -140,7 +130,7 @@ async function handleShowTasks(from, twiml) {
 /**
  * Handle showing today's tasks
  * @param {String} from - User's phone number
- * @param {Object} twiml - Mock MessagingResponse object
+ * @param {Object} twiml - Twilio MessagingResponse object
  */
 async function handleShowToday(from, twiml) {
   try {
@@ -156,7 +146,7 @@ async function handleShowToday(from, twiml) {
  * Handle deleting a task
  * @param {String} from - User's phone number
  * @param {String} taskId - Task ID to delete
- * @param {Object} twiml - Mock MessagingResponse object
+ * @param {Object} twiml - Twilio MessagingResponse object
  */
 async function handleDeleteTask(from, taskId, twiml) {
   try {
@@ -182,7 +172,7 @@ async function handleDeleteTask(from, taskId, twiml) {
  * Handle marking a task as done
  * @param {String} from - User's phone number
  * @param {String} taskId - Task ID to mark as done
- * @param {Object} twiml - Mock MessagingResponse object
+ * @param {Object} twiml - Twilio MessagingResponse object
  */
 async function handleMarkDone(from, taskId, twiml) {
   try {
@@ -208,7 +198,7 @@ async function handleMarkDone(from, taskId, twiml) {
  * Handle creating a task
  * @param {String} from - User's phone number
  * @param {String} message - Task description message
- * @param {Object} twiml - Mock MessagingResponse object
+ * @param {Object} twiml - Twilio MessagingResponse object
  */
 async function handleCreateTask(from, message, twiml) {
   try {

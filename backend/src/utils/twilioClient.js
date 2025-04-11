@@ -1,38 +1,20 @@
 /**
- * Twilio Client Utility - MOCK VERSION
- * This version doesn't require Twilio authentication
- * It logs messages instead of sending them
+ * Twilio Client Utility
+ * Provides functions for programmatically sending WhatsApp messages
  */
+const twilio = require('twilio');
 
-// Mock Twilio client that doesn't require authentication
-const createMockTwilioClient = () => {
-  console.log('⚠️ Using MOCK Twilio client - messages will be logged but not sent');
-  
-  return {
-    messages: {
-      create: async (options) => {
-        const mockSid = 'MOCK_' + Math.random().toString(36).substring(2, 15);
-        console.log('📱 MOCK WhatsApp message:', {
-          from: options.from,
-          to: options.to,
-          body: options.body,
-          mockSid
-        });
-        
-        return { sid: mockSid };
-      }
-    }
-  };
-};
-
-// Use mock client instead of actual Twilio client
-const client = createMockTwilioClient();
+// Initialize the Twilio client
+const client = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
 
 /**
- * Send a WhatsApp message (MOCK VERSION)
+ * Send a WhatsApp message
  * @param {String} to - Recipient phone number (will be prefixed with 'whatsapp:')
  * @param {String} body - Message content
- * @returns {Promise} Mock Message SID
+ * @returns {Promise} Message SID if successful
  */
 const sendWhatsAppMessage = async (to, body) => {
   try {
@@ -45,17 +27,17 @@ const sendWhatsAppMessage = async (to, body) => {
     // Remove 'whatsapp:' prefix if it's already there
     normalizedNumber = normalizedNumber.replace('whatsapp:', '');
     
-    // Send the message using mock client
+    // Send the message
     const message = await client.messages.create({
-      from: `whatsapp:MOCK_TWILIO_NUMBER`,
+      from: `whatsapp:${process.env.TWILIO_PHONE_NUMBER}`,
       body: body,
       to: `whatsapp:${normalizedNumber}`
     });
     
-    console.log(`MOCK WhatsApp message sent to ${normalizedNumber}, SID: ${message.sid}`);
+    console.log(`WhatsApp message sent to ${normalizedNumber}, SID: ${message.sid}`);
     return message.sid;
   } catch (error) {
-    console.error('Error sending mock WhatsApp message:', error);
+    console.error('Error sending WhatsApp message:', error);
     throw error;
   }
 };
