@@ -1,0 +1,221 @@
+:root {
+  --color-primary: #25D366;
+  --color-primary-dark: #128C7E;
+  --color-primary-light: #DCF8C6;
+  --color-secondary: #34B7F1;
+  --color-text: #333333;
+  --color-text-light: #667781;
+  --color-background: #F5F5F5;
+  --color-card: #FFFFFF;
+  --color-border: #E9EDEF;
+  --color-success: #4CAF50;
+  --color-warning: #FFC107;
+  --color-danger: #F44336;
+  --color-info: #2196F3;
+  
+  --color-priority-high: #F44336;
+  --color-priority-medium: #FFC107;
+  --color-priority-low: #4CAF50;
+  
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.05), 0 4px 6px rgba(0, 0, 0, 0.05);
+  
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+a {
+  text-decoration: none;
+  color: var(--color-primary-dark);
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  border: none;
+  outline: none;
+}
+
+button {
+  cursor: pointer;
+  background: none;
+}
+
+ul, ol {
+  list-style: none;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Utility classes */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-lg);
+}
+
+.card {
+  background-color: var(--color-card);
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--spacing-lg);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius-md);
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-dark);
+}
+
+.btn-secondary {
+  background-color: var(--color-secondary);
+  color: white;
+}
+
+.btn-outline {
+  background-color: transparent;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.btn-outline:hover {
+  background-color: var(--color-primary-light);
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.mt-sm { margin-top: var(--spacing-sm); }
+.mt-md { margin-top: var(--spacing-md); }
+.mt-lg { margin-top: var(--spacing-lg); }
+.mb-sm { margin-bottom: var(--spacing-sm); }
+.mb-md { margin-bottom: var(--spacing-md); }
+.mb-lg { margin-bottom: var(--spacing-lg); }
+
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.gap-sm {
+  gap: var(--spacing-sm);
+}
+
+.gap-md {
+  gap: var(--spacing-md);
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.text-danger {
+  color: var(--color-danger);
+}
+
+.text-success {
+  color: var(--color-success);
+}
+
+.text-warning {
+  color: var(--color-warning);
+}
+
+.text-info {
+  color: var(--color-info);
+}
+
+.priority-high {
+  color: var(--color-priority-high);
+}
+
+.priority-medium {
+  color: var(--color-priority-medium);
+}
+
+.priority-low {
+  color: var(--color-priority-low);
+}
+
+@media (max-width: 768px) {
+  :root {
+    --spacing-lg: 20px;
+    --spacing-xl: 28px;
+  }
+  
+  .container {
+    padding: 0 var(--spacing-md);
+  }
+} 
