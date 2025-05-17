@@ -1,122 +1,111 @@
 /**
- * Response Formatter - Formats consistent WhatsApp responses
+ * Response Formatter - Formats responses for WhatsApp messages
  */
 const dayjs = require('dayjs');
+const relativeTime = require('dayjs/plugin/relativeTime');
+
+// Extend dayjs with plugins
+dayjs.extend(relativeTime);
 
 /**
- * Format a single task for WhatsApp display
- * @param {Object} task - Task document
- * @param {Boolean} includeId - Whether to include the task ID
- * @returns {String} Formatted task string
+ * Format a task for display in WhatsApp
+ * @param {Object} task - Task object
+ * @returns {String} Formatted message
  */
-function formatTask(task, includeId = true) {
-  const formattedDueDate = dayjs(task.dueDate).format('MMM D, YYYY [at] h:mm A');
-  const status = task.status === 'Done' ? '✅' : task.status === 'In Progress' ? '⏳' : '🆕';
-  const priority = getPriorityIcon(task.priority) + ' ' + task.priority;
+function formatTask(task) {
+  if (!task) return 'No task found.';
   
-  let responseMessage = `${status} *${task.description}*\n`;
-  responseMessage += `  📅 Due: ${formattedDueDate}\n`;
-  responseMessage += `  ${priority}\n`;
+  const dueDate = dayjs(task.dueDate);
+  const now = dayjs();
+  const isOverdue = dueDate.isBefore(now, 'day');
+  const isToday = dueDate.isSame(now, 'day');
   
+  let responseMessage = '';
+  
+  // Add status emoji
+  if (task.status === 'Done') {
+    responseMessage += '✅ ';
+  } else if (isOverdue) {
+    responseMessage += '⚠️ ';
+  } else {
+    responseMessage += '📝 ';
+  }
+  
+  // Add priority emoji using variable
+  const priorityEmoji = task.priority === 'High' ? '🔴' : 
+                       task.priority === 'Medium' ? '🟡' : 
+                       '🟢';
+  
+  // Add task details
+  responseMessage += `${task.description}\n`;
+  responseMessage += `  📅 Due: ${dueDate.format('MMM D, YYYY')} (${dueDate.fromNow()})\n`;
+  responseMessage += `  ${priorityEmoji}  Priority: ${task.priority}\n`;
+  responseMessage += `  📊 Status: ${task.status}\n`;
   if (task.course) {
     responseMessage += `  📚 Course: ${task.course}\n`;
-  }
-  
-  if (task.repeat !== 'none') {
-    responseMessage += `  🔄 Repeat: ${task.repeat}\n`;
-  }
-  
-  if (includeId) {
-    responseMessage += `  🆔 ID: ${task._id}\n`;
   }
   
   return responseMessage;
 }
 
 /**
- * Get icon for priority level
- * @param {String} priority - Priority level
- * @returns {String} Emoji icon
+ * Format a list of tasks for display
+ * @param {Array} tasks - Array of task objects
+ * @returns {String} Formatted message
  */
-function getPriorityIcon(priority) {
-  switch (priority) {
-    case 'High':
-      return '🔴';
-    case 'Medium':
-      return '🟡';
-    case 'Low':
-      return '🟢';
-    default:
-      return '⚪';
-  }
-}
-
-/**
- * Format a list of tasks for WhatsApp display
- * @param {Array} tasks - Array of task documents
- * @param {String} title - Title for the list
- * @returns {String} Formatted task list
- */
-function formatTaskList(tasks, title = 'Your Tasks') {
+function formatTaskList(tasks) {
   if (!tasks || tasks.length === 0) {
-    return "You don't have any tasks yet. Add one by sending a message!";
+    return 'No tasks found.';
   }
   
-  let responseMessage = `*${title}:*\n\n`;
+  let responseMessage = `📋 Recent tasks:\n\n`;
   
   tasks.forEach((task, index) => {
-    responseMessage += formatTask(task, true);
-    
-    // Add spacing between tasks
-    if (index < tasks.length - 1) {
-      responseMessage += '\n';
-    }
+    responseMessage += `${index + 1}. ${formatTask(task)}\n`;
   });
   
   return responseMessage;
 }
 
 /**
- * Format the help message
+ * Format help message
  * @returns {String} Formatted help message
  */
 function formatHelpMessage() {
-  return `👋 *Welcome to TaskBot!*\n\n`
-    + `I'm your WhatsApp Task Manager. Here's how you can use me:\n\n`
-    + `*Add a Task:*\n`
-    + `Send any message or use format: Task: [description], Due: [date], Priority: [level], Course: [name], Repeat: [frequency]\n\n`
-    + `*Example:*\n`
-    + `Task: Submit assignment, Due: tomorrow 5pm, Priority: High, Course: Math\n\n`
-    + `*Other Commands:*\n`
-    + `• *show tasks* - View all your tasks\n`
-    + `• *today* or *agenda* - See today's tasks\n`
-    + `• *delete [ID]* - Remove a task\n`
-    + `• *done [ID]* - Mark a task as completed\n\n`
-    + `Need more help? Just type *help* anytime!`;
+  return '🤖 *WhatsApp Task Manager Bot*\n\n' +
+    '📋 *Available Commands:*\n\n' +
+    '• *help* - Show this help message\n' +
+    '• *show tasks* - Show your recent tasks\n' +
+    '• *show today* - Show today\'s tasks\n' +
+    '• *delete [number]* - Delete a task (use number from task list)\n' +
+    '• *done [number]* - Mark task as done (use number from task list)\n\n' +
+    '📝 *Create Task Format:*\n' +
+    'Task: [description], Due: [date], Priority: [level], Course: [name]\n\n' +
+    '📅 *Date Formats:*\n' +
+    '• today or today at 5pm\n' +
+    '• tomorrow or tomorrow at 3pm\n' +
+    '• MM/DD/YYYY (e.g., 04/15/2024)\n\n' +
+    '🎯 *Priority Levels:*\n' +
+    'Low 🟢 Medium 🟡 High 🔴\n\n' +
+    '📊 *Task Status:*\n' +
+    'New 📝 In Progress ⚠️ Done ✅\n\n' +
+    '📱 *View all your tasks on our web app:*\n' +
+    'http://your-frontend-url/tasks';
 }
 
 /**
- * Format an error message
- * @param {String} errorMsg - Error message
+ * Format error message
+ * @param {String} message - Error message
  * @returns {String} Formatted error message
  */
-function formatErrorMessage(errorMsg) {
-  return `❌ *Error:* ${errorMsg}`;
-}
-
-/**
- * Format a success message
- * @param {String} message - Success message
- * @returns {String} Formatted success message
- */
-function formatSuccessMessage(message) {
-  return `✅ *Success:* ${message}`;
+function formatErrorMessage(message) {
+  return `❌ ${message}\n\n` +
+    'Type `help` to see available commands and format.';
 }
 
 module.exports = {
   formatTask,
   formatTaskList,
   formatHelpMessage,
-  formatErrorMessage,
-  formatSuccessMessage
+  formatErrorMessage
 };

@@ -15,72 +15,81 @@ const twilioClient = require('../utils/twilioClient');
 exports.processIncomingMessage = async (req, res) => {
   try {
     // Debug logging for all request details
-    console.log('Webhook Request Received:');
-    console.log('Headers:', req.headers);
-    console.log('Body:', req.body);
-    
-    // Log incoming message for debugging
-    console.log('Received WhatsApp message:', {
-      body: req.body.Body,
-      from: req.body.From,
-      to: req.body.To,
-      messageId: req.body.MessageSid
+    console.log('Webhook Request Received:', {
+      headers: req.headers,
+      body: req.body,
+      timestamp: new Date().toISOString()
     });
-
+    
     // Extract message content and sender information
     const incomingMsg = req.body.Body ? req.body.Body.trim() : '';
-    
-    // Normalize phone number by removing 'whatsapp:' prefix if present
     const from = req.body.From ? req.body.From.replace('whatsapp:', '') : '';
     
     // Check for valid input
     if (!incomingMsg || !from) {
-      console.error('Invalid webhook payload: missing Body or From field');
+      console.error('Invalid webhook payload:', { incomingMsg, from });
       return res.status(400).send('Bad Request: Missing required fields');
     }
     
     // Create Twilio response object
     const twiml = new MessagingResponse();
     
-    // Parse the message to determine the command type
-    const { command, params } = parseCommandMessage(incomingMsg);
-    
-    // Log the detected command
-    console.log(`Detected command: ${command}`, params);
-    
-    // Handle different command types
-    switch (command) {
-      case 'help':
-        await handleHelp(twiml);
-        break;
-      case 'showTasks':
-        await handleShowTasks(from, twiml);
-        break;
-      case 'showToday':
-        await handleShowToday(from, twiml);
-        break;
-      case 'deleteTask':
-        await handleDeleteTask(from, params.taskId, twiml);
-        break;
-      case 'markDone':
-        await handleMarkDone(from, params.taskId, twiml);
-        break;
-      case 'createTask':
-        await handleCreateTask(from, incomingMsg, twiml);
-        break;
-      default:
-        // Default to creating a task
-        await handleCreateTask(from, incomingMsg, twiml);
+    try {
+      // Parse the message to determine the command type
+      const { command, params } = parseCommandMessage(incomingMsg);
+      console.log(`Processing command: ${command}`, { params, from });
+      
+      // Handle different command types
+      switch (command) {
+        case 'help':
+          await handleHelp(twiml);
+          break;
+        case 'showTasks':
+          await handleShowTasks(from, twiml);
+          break;
+        case 'showToday':
+          await handleShowToday(from, twiml);
+          break;
+        case 'deleteTask':
+          await handleDeleteTask(from, params.taskNumber, twiml);
+          break;
+        case 'markDone':
+          await handleMarkDone(from, params.taskNumber, twiml);
+          break;
+        case 'createTask':
+          await handleCreateTask(from, incomingMsg, twiml);
+          break;
+        default:
+          await handleCreateTask(from, incomingMsg, twiml);
+      }
+      
+      // Log the response before sending
+      console.log('Sending WhatsApp response:', {
+        to: from,
+        message: twiml.toString(),
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      console.error('Error processing command:', {
+        error: error.message,
+        stack: error.stack,
+        from,
+        incomingMsg
+      });
+      twiml.message(responseFormatter.formatErrorMessage('An error occurred while processing your request. Please try again.'));
     }
     
     // Send the response
     res.writeHead(200, { 'Content-Type': 'text/xml' });
     res.end(twiml.toString());
     
-    // Log the response for debugging
-    console.log('Sent WhatsApp response:', twiml.toString());
   } catch (error) {
-    console.error('Error processing webhook:', error);
+    console.error('Critical error in webhook processing:', {
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
     
     // Ensure we always send a response to Twilio
     const twiml = new MessagingResponse();
@@ -106,7 +115,8 @@ async function handleHelp(twiml) {
  */
 async function handleShowTasks(from, twiml) {
   try {
-    const tasks = await taskService.getTasksForUser(from);
+    // Get first 5 tasks
+    const { tasks } = await taskService.getTasksForUser(from, { limit: 5 });
     
     // Get today's date in YYYY-MM-DD format for the link
     const today = new Date();
@@ -118,7 +128,9 @@ async function handleShowTasks(from, twiml) {
     
     // Add the link to the task list message
     let message = responseFormatter.formatTaskList(tasks);
-    message += `\n\n📱 *View and manage your tasks on our web app:*\n${taskPageUrl}`;
+    
+    // Always show web app link
+    message += `\n📱 View all tasks on our web app:\n${taskPageUrl}`;
     
     twiml.message(message);
   } catch (error) {
@@ -145,22 +157,33 @@ async function handleShowToday(from, twiml) {
 /**
  * Handle deleting a task
  * @param {String} from - User's phone number
- * @param {String} taskId - Task ID to delete
+ * @param {String} taskNumber - Task number from the list
  * @param {Object} twiml - Twilio MessagingResponse object
  */
-async function handleDeleteTask(from, taskId, twiml) {
+async function handleDeleteTask(from, taskNumber, twiml) {
   try {
-    if (!taskId) {
-      twiml.message(responseFormatter.formatErrorMessage('Please specify which task to delete using "delete [task ID]".'));
+    // Get all tasks for the user
+    const { tasks } = await taskService.getTasksForUser(from, { limit: 5 });
+    
+    // Convert task number to index (1-based to 0-based)
+    const index = parseInt(taskNumber) - 1;
+    
+    // Check if the index is valid
+    if (isNaN(index) || index < 0 || index >= tasks.length) {
+      twiml.message(responseFormatter.formatErrorMessage('Invalid task number. Please use a number from the task list.'));
       return;
     }
     
+    // Get the task ID from the task at the specified index
+    const taskId = tasks[index]._id;
+    
+    // Delete the task
     const deleted = await taskService.deleteTask(from, taskId);
     
     if (deleted) {
-      twiml.message(responseFormatter.formatSuccessMessage('Task deleted successfully!'));
+      twiml.message('✅ Task deleted successfully.');
     } else {
-      twiml.message(responseFormatter.formatErrorMessage('Task not found or already deleted.'));
+      twiml.message(responseFormatter.formatErrorMessage('Could not delete the task. Please try again later.'));
     }
   } catch (error) {
     console.error('Error in handleDeleteTask:', error);
@@ -171,20 +194,20 @@ async function handleDeleteTask(from, taskId, twiml) {
 /**
  * Handle marking a task as done
  * @param {String} from - User's phone number
- * @param {String} taskId - Task ID to mark as done
+ * @param {String} taskNumber - Task number from the list
  * @param {Object} twiml - Twilio MessagingResponse object
  */
-async function handleMarkDone(from, taskId, twiml) {
+async function handleMarkDone(from, taskNumber, twiml) {
   try {
-    if (!taskId) {
-      twiml.message(responseFormatter.formatErrorMessage('Please specify which task to mark as done using "done [task ID]".'));
+    if (!taskNumber) {
+      twiml.message(responseFormatter.formatErrorMessage('Please specify which task to mark as done using "done [task number]".'));
       return;
     }
     
-    const updatedTask = await taskService.markTaskAsDone(from, taskId);
+    const updatedTask = await taskService.markTaskAsDone(from, taskNumber);
     
     if (updatedTask) {
-      twiml.message(responseFormatter.formatSuccessMessage(`Task "${updatedTask.description}" marked as done!`));
+      twiml.message(`✅ Task "${updatedTask.description}" marked as done!`);
     } else {
       twiml.message(responseFormatter.formatErrorMessage('Task not found.'));
     }

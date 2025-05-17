@@ -3,6 +3,20 @@
  */
 const Task = require('../models/Task');
 const { findOrCreateUser } = require('./userService');
+const dayjs = require('dayjs');
+const isSameOrBefore = require('dayjs/plugin/isSameOrBefore');
+const isSameOrAfter = require('dayjs/plugin/isSameOrAfter');
+const utc = require('dayjs/plugin/utc');
+const timezone = require('dayjs/plugin/timezone');
+
+// Extend dayjs with plugins
+dayjs.extend(isSameOrBefore);
+dayjs.extend(isSameOrAfter);
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+// Set default timezone
+dayjs.tz.setDefault('UTC');
 
 /**
  * Task Builder - Implements the builder pattern for creating tasks
@@ -18,7 +32,6 @@ class TaskBuilder {
       dueDate,
       status: 'New',
       priority: 'Medium',
-      repeat: 'none',
       course: null
     };
   }
@@ -43,13 +56,6 @@ class TaskBuilder {
   setPriority(priority) {
     if (['Low', 'Medium', 'High'].includes(priority)) {
       this._task.priority = priority;
-    }
-    return this;
-  }
-
-  setRepeat(repeat) {
-    if (['none', 'Daily', 'Weekly', 'Monthly', 'Yearly'].includes(repeat)) {
-      this._task.repeat = repeat;
     }
     return this;
   }
@@ -101,7 +107,6 @@ async function createTask(phoneNumber, taskData) {
     
     // Add optional properties if provided
     if (taskData.priority) taskBuilder.setPriority(taskData.priority);
-    if (taskData.repeat) taskBuilder.setRepeat(taskData.repeat);
     if (taskData.course) taskBuilder.setCourse(taskData.course);
     if (taskData.status) taskBuilder.setStatus(taskData.status);
     
@@ -133,7 +138,7 @@ async function deleteTask(phoneNumber, taskId) {
  * Get all tasks for a user
  * @param {String} phoneNumber - User's phone number
  * @param {Object} options - Filtering and sorting options
- * @returns {Promise<Array>} Array of task documents
+ * @returns {Promise<Object>} Object containing tasks and total count
  */
 async function getTasksForUser(phoneNumber, options = {}) {
   try {
@@ -161,8 +166,24 @@ async function getTasksForUser(phoneNumber, options = {}) {
     } else {
       sortOptions.dueDate = 1; // Default sort by due date ascending
     }
+
+    // Get total count
+    const totalCount = await Task.countDocuments(query);
     
-    return await Task.find(query).sort(sortOptions);
+    // Apply pagination
+    const limit = options.limit || totalCount;
+    const skip = options.skip || 0;
+    
+    const tasks = await Task.find(query)
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limit);
+    
+    return {
+      tasks,
+      totalCount,
+      hasMore: totalCount > (skip + limit)
+    };
   } catch (error) {
     console.error('Error fetching tasks:', error.message);
     throw error;
@@ -172,15 +193,35 @@ async function getTasksForUser(phoneNumber, options = {}) {
 /**
  * Mark a task as done
  * @param {String} phoneNumber - User's phone number
- * @param {String} taskId - Task ID
+ * @param {String} taskNumber - Task number from the list
  * @returns {Promise<Object>} Updated task
  */
-async function markTaskAsDone(phoneNumber, taskId) {
+async function markTaskAsDone(phoneNumber, taskNumber) {
   try {
+    // Validate task number
+    const taskNum = parseInt(taskNumber);
+    if (isNaN(taskNum) || taskNum < 1) {
+      throw new Error('Invalid task number');
+    }
+
     const user = await findOrCreateUser(phoneNumber);
+    
+    // Get all tasks for the user
+    const { tasks } = await getTasksForUser(phoneNumber, { 
+      limit: taskNum,
+      sort: 'dueDate',
+      order: 'asc'
+    });
+    
+    // Check if task exists at the specified position
+    if (tasks.length < taskNum) {
+      return null;
+    }
+    
+    const taskToUpdate = tasks[taskNum - 1];
     return await Task.findOneAndUpdate(
-      { _id: taskId, userId: user._id },
-      { status: 'Done' },
+      { _id: taskToUpdate._id, userId: user._id },
+      { $set: { status: 'Done' } },
       { new: true }
     );
   } catch (error) {
@@ -211,18 +252,24 @@ async function updateTask(phoneNumber, taskId, updateData) {
 }
 
 /**
- * Get tasks due today
+ * Get tasks due today for a user
  * @param {String} phoneNumber - User's phone number
- * @returns {Promise<Array>} Array of tasks due today
+ * @returns {Promise<Array>} Array of task documents
  */
 async function getTasksDueToday(phoneNumber) {
   try {
     const user = await findOrCreateUser(phoneNumber);
     
-    // Create date range for today
-    const today = new Date();
-    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+    // Create date range for today using a single dayjs object
+    const now = dayjs();
+    const startOfDay = now.startOf('day').toDate();
+    const endOfDay = now.endOf('day').toDate();
+    
+    console.log('Date range for today:', {
+      startOfDay,
+      endOfDay,
+      currentTime: new Date()
+    });
     
     return await Task.find({
       userId: user._id,

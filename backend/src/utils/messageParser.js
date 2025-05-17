@@ -2,7 +2,7 @@
  * Message Parser - Parses incoming WhatsApp messages
  * 
  * Expected format for task creation:
- * "Task: Buy groceries, Due: tomorrow 5pm, Priority: High, Course: Math, Repeat: Weekly"
+ * "Task: Buy groceries, Due: tomorrow 5pm, Priority: High, Course: Math"
  * 
  * All fields except "Task" are optional
  */
@@ -45,8 +45,8 @@ function parseTaskMessage(message) {
       description = message.trim();
     }
 
-    // Parse due date (default to tomorrow if not specified)
-    let dueDate = dayjs().add(1, 'day').hour(12).minute(0).second(0).toDate();
+    // Parse due date (default to today if not specified)
+    let dueDate = dayjs().hour(12).minute(0).second(0).toDate();
     const dueMatch = message.match(/due:\s*([^,]+)/i);
     
     if (dueMatch && dueMatch[1].trim()) {
@@ -54,9 +54,9 @@ function parseTaskMessage(message) {
       
       // Handle common date expressions
       if (dueDateText === 'today') {
-        dueDate = dayjs().hour(23).minute(59).second(0).toDate();
+        dueDate = dayjs().endOf('day').toDate();
       } else if (dueDateText === 'tomorrow') {
-        dueDate = dayjs().add(1, 'day').hour(12).minute(0).second(0).toDate();
+        dueDate = dayjs().add(1, 'day').startOf('day').toDate();
       } else if (dueDateText.includes('today at') || dueDateText.includes('today')) {
         const timeMatch = dueDateText.match(/(\d+)(?::(\d+))?\s*(am|pm)?/i);
         if (timeMatch) {
@@ -89,7 +89,15 @@ function parseTaskMessage(message) {
           const day = parseInt(dateMatch[2]);
           const year = dateMatch[3] ? parseInt(dateMatch[3]) : dayjs().year();
           
-          dueDate = dayjs().year(year).month(month).date(day).hour(12).minute(0).second(0).toDate();
+          // Create a new dayjs object for the specific date
+          dueDate = dayjs()
+            .year(year)
+            .month(month)
+            .date(day)
+            .hour(12)
+            .minute(0)
+            .second(0)
+            .toDate();
         }
       }
     }
@@ -114,30 +122,17 @@ function parseTaskMessage(message) {
       course = courseMatch[1].trim();
     }
 
-    // Parse repeat (default to none)
-    let repeat = 'none';
-    const repeatMatch = message.match(/repeat:\s*([^,]+)/i);
-    
-    if (repeatMatch && repeatMatch[1].trim()) {
-      const repeatText = repeatMatch[1].trim().toLowerCase();
-      
-      if (['none', 'daily', 'weekly', 'monthly', 'yearly'].includes(repeatText)) {
-        repeat = repeatText.charAt(0).toUpperCase() + repeatText.slice(1);
-      }
-    }
-
     // Build the parsed data object
     result.isValid = true;
     result.parsedData = {
       description,
       dueDate,
       priority,
-      repeat,
       course
     };
   } catch (error) {
     console.error('Error parsing message:', error);
-    result.errorMessage = "Could not parse your message. Please try again using the format: Task: description, Due: date, Priority: level, Course: name, Repeat: frequency";
+    result.errorMessage = "Could not parse your message. Please try again using the format: Task: description, Due: date, Priority: level, Course: name";
   }
 
   return result;
@@ -159,31 +154,33 @@ function parseCommandMessage(message) {
     return { command: 'help', params: {} };
   } 
   
+  // Check for "show today" first
+  if (normalizedMessage === 'show today' || normalizedMessage === 'today' || normalizedMessage === 'agenda') {
+    return { command: 'showToday', params: {} };
+  }
+  
+  // Then check for other show commands
   if (firstWord === 'show' || normalizedMessage === 'tasks') {
     return { command: 'showTasks', params: {} };
   }
   
-  if (normalizedMessage === 'today' || normalizedMessage === 'agenda') {
-    return { command: 'showToday', params: {} };
-  }
-  
   if (firstWord === 'delete') {
-    const taskIdMatch = normalizedMessage.match(/delete\s+(.+)/i);
-    const taskId = taskIdMatch && taskIdMatch[1] ? taskIdMatch[1].trim() : null;
+    const taskNumberMatch = normalizedMessage.match(/delete\s+(\d+)/i);
+    const taskNumber = taskNumberMatch && taskNumberMatch[1] ? taskNumberMatch[1].trim() : null;
     
     return { 
       command: 'deleteTask', 
-      params: { taskId } 
+      params: { taskNumber } 
     };
   }
   
   if (firstWord === 'done' || firstWord === 'complete') {
-    const taskIdMatch = normalizedMessage.match(/(done|complete)\s+(.+)/i);
-    const taskId = taskIdMatch && taskIdMatch[2] ? taskIdMatch[2].trim() : null;
+    const taskNumberMatch = normalizedMessage.match(/(done|complete)\s+(\d+)/i);
+    const taskNumber = taskNumberMatch && taskNumberMatch[2] ? taskNumberMatch[2].trim() : null;
     
     return { 
       command: 'markDone', 
-      params: { taskId } 
+      params: { taskNumber } 
     };
   }
   

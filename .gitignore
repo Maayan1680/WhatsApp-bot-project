@@ -34,5 +34,5 @@ WhatsApp-bot-project/frontend/dist/
 WhatsApp-bot-project/backend/data/
 
 # Package lock files (optional - uncomment if you want to ignore them)
-# package-lock.json
+package-lock.json
 # yarn.lock 

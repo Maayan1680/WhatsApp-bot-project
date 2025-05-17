@@ -36,11 +36,6 @@ const taskSchema = new mongoose.Schema({
     type: String,
     trim: true,
     index: true
-  },
-  repeat: { 
-    type: String, 
-    enum: ['none', 'Daily', 'Weekly', 'Monthly', 'Yearly'], 
-    default: 'none'
   }
 }, {
   timestamps: true
